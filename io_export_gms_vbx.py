@@ -25,8 +25,8 @@ def fetch_attribs(desc,node,ba,byte_pos,frame):
     """"Fetch the attribute values from the given node and place in ba at byte_pos"""
     id = node.bl_rna.identifier
     if id in desc:
-        for prop, occurences in desc[id].items():                   # Property name and occurences in bytedata
-            for offset, attr_blen, fmt, index, func in occurences:  # Each occurence's data (tuple assignment!)
+        for prop, occurrences in desc[id].items():                   # Property name and occurrences in bytedata
+            for offset, attr_blen, fmt, index, func in occurrences:  # Each occurrence's data (tuple assignment!)
                 ind = byte_pos+offset
                 val = getattr(node,prop)
                 if func != None: val = func(val)
@@ -46,6 +46,7 @@ def write_object_ba(scene,obj,desc,ba,frame,reverse_loop,apply_transforms):
     ba_pos = 0
     for p in m.polygons:
         # Loop through vertices
+        # TODO Speed this up!
         iter = reversed(p.loop_indices) if reverse_loop else p.loop_indices
         for li in iter:
             fetch_attribs(desc,scene,ba,ba_pos,frame)
@@ -74,7 +75,7 @@ def write_object_ba(scene,obj,desc,ba,frame,reverse_loop,apply_transforms):
     bpy.data.meshes.remove(m)
 
 def construct_ds(obj,attr):
-    """Constructs the data structure required to move through the attributes of a given object"""
+    """Construct the data structure required to move through the attributes of a given object"""
     desc, offset = {}, 0
     
     for a in attr:
@@ -138,31 +139,6 @@ def mat_name_to_index(val):
     """Return the index of the material with the given name in bpy.data.materials"""
     return bpy.data.materials.find(val)
 
-# Stuff to export physics
-def object_physics_to_json(obj):
-    """For objects of type 'MESH', exports all edge loops that make up a face or polygon. Each one becomes a chain fixture in Game Maker."""
-    physics_props = {'angular_damping','collision_shape','enabled','friction','kinematic','linear_damping','mass','restitution','type'}
-    b = obj.rigid_body
-    
-    if b == None:
-        return {}
-    
-    physics_settings = {x:b.path_resolve(x) for x in physics_props}
-    physics_settings['collision_group'] = [i for i, x in enumerate(b.collision_groups) if x == True][0]
-    
-    # Get reference to object data
-    d = obj.data
-    
-    # Select the necessary stuff
-    if b.collision_shape == 'MESH':
-        physics_settings['coords'] = []
-        for poly in d.polygons:
-            vtx_indices = [d.loops[x].vertex_index for x in poly.loop_indices]
-            ordered_verts = [d.vertices[x].co.xy[:] for x in vtx_indices]
-            physics_settings['coords'].append(ordered_verts)
-    
-    return physics_settings
-
 def object_get_texture_name(obj):
     """Returns the name of the texture image if the object has one defined"""
     tex_name = ""
@@ -184,35 +160,27 @@ def object_get_diffuse_color(obj):
 # Custom type to be used in collection
 class AttributeType(bpy.types.PropertyGroup):
     # Getter and setter functions
-    def test_cb(self,context):
+    def fill_attr_cb(self,context):
+        if self.type == None: return self.attr_items
         props = getattr(bpy.types,self.type).bl_rna.properties
         items = [(p.identifier,p.name,p.description) for p in props]
         return items
     
-    #def update_type(self, context):
-    #    self.attr = test_cb(self,context)
-    
-    def set_format_from_type(self, context):
-        attr = getattr(bpy.types,self.type).bl_rna.properties[self.attr]
-        map_fmt = {'FLOAT':'f','INT':'i', 'BOOLEAN':'?'}    # TODO: extend this list a bit more
-        type = map_fmt.get(attr.type,'*')                   # Asterisk '*' means "I don't know what this should be..."
-        self.fmt = type * attr.array_length if attr.is_array else type
-    
     # Currently supported attribute sources, maintained manually at the moment
     supported_sources = {'MeshVertex','MeshLoop','MeshUVLoop','ShapeKeyPoint','VertexGroupElement','Material','MeshLoopColor','MeshPolygon','Scene','Object'}
-    source_items = []
+    source_items, attr_items = [], []
     for src in supported_sources:
-        id = getattr(bpy.types,src)
-        rna = id.bl_rna
+        rna = getattr(bpy.types,src).bl_rna
         source_items.append((rna.identifier,rna.name,rna.description))
+        props = rna.properties
+        items = [(p.identifier,p.name,p.description) for p in props]
+        attr_items.extend(items)
     
     # Actual properties
-    type = bpy.props.EnumProperty(name="Source", description="Where to get the data from", items=source_items, default="MeshVertex", update = set_format_from_type)
-    attr = bpy.props.EnumProperty(name="Attribute", description="Which attribute to get", items=test_cb, update = set_format_from_type)
-    fmt = bpy.props.StringProperty(name="Format", description="The format string to be used for the binary data", default="fff")
-    int = bpy.props.IntProperty(name="Int", description="Interpolation offset, i.e. 0 means value at current frame, 1 means value at next frame", default=0, min=0, max=1)
-    func = bpy.props.StringProperty(name="Function", description="'Pre-processing' function to be called before conversion to binary format - must exist in globals()", default="")
-    #func = bpy.props.EnumProperty(name="Function", description="'Pre-processing' function to be called before conversion to binary format - must exist in globals()", items=[("","",""),("float_to_byte","float_to_byte",""),("vec_to_bytes","vec_to_bytes",""),("invert_v","invert_v",""),("invert_y","invert_y",""),("vertex_group_ids_to_bitmask","vertex_group_ids_to_bitmask","")], default="")
+    type = bpy.props.EnumProperty(name="Source", description="Where to get the data from", items=source_items,default=None,update=fill_attr_cb)
+    attr = bpy.props.EnumProperty(name="Attribute", description="Which attribute to get", items=attr_items)
+    fmt  = bpy.props.StringProperty(name="Format", description="The format string to be used for the binary data", default="fff")
+    int  = bpy.props.IntProperty(name="Int", description="Interpolation offset, i.e. 0 means value at current frame, 1 means value at next frame", default=0, min=0, max=1)
 
 # Operators to get the vertex format customization add/remove to work
 # See https://blender.stackexchange.com/questions/57545/can-i-make-a-ui-button-that-makes-buttons-in-a-panel
@@ -220,7 +188,7 @@ class AddAttributeOperator(Operator):
     """Add a new attribute to the vertex format"""
     bl_idname = "export_scene.add_attribute_operator"
     bl_label = "Add Vertex Attribute"
-
+    
     def execute(self, context):
         # context.active_operator refers to ExportGMSVertexBuffer instance
         context.active_operator.vertex_format.add()
@@ -249,7 +217,7 @@ class ExportGMSVertexBuffer(Operator, ExportHelper):
     """Export (parts of) the current scene to a vertex buffer, including textures and a description file in JSON format"""
     bl_idname = "export_scene.gms_blmod" # important since its how bpy.ops.export_scene.gms_blmod is constructed
     bl_label = "Export GM:Studio BLMod"
-    bl_options = {'PRESET'}                 # Allow presets of exporter configurations
+    bl_options = {'PRESET'}              # Allow presets of exporter configurations
     
     def __init__(self):
         # Blender Python trickery: dynamic addition of an index variable to the class
