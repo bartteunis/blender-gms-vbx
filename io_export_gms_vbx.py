@@ -157,28 +157,28 @@ def object_get_diffuse_color(obj):
     else:
         return (1.0,1.0,1.0)
 
+# Currently supported attribute sources, maintained manually at the moment
+supported_sources = {'MeshVertex','MeshLoop','MeshUVLoop','ShapeKeyPoint','VertexGroupElement','Material','MeshLoopColor','MeshPolygon','Scene','Object'}
+source_items, attr_items = [], []
+for src in supported_sources:
+    rna = getattr(bpy.types,src).bl_rna
+    source_items.append((rna.identifier,rna.name,rna.description))
+
+def src(self, context):
+    return source_items
+
+class PathType(bpy.types.PropertyGroup):
+    def set_source_items(self, context):
+        source_items = [(str(self.node),"Testink","Descink")]
+        
+        return None
+    
+    node = bpy.props.EnumProperty(name="Node", description="Data Node", items=src, update=set_source_items)
+
 # Custom type to be used in collection
 class AttributeType(bpy.types.PropertyGroup):
-    # Getter and setter functions
-    def fill_attr_cb(self,context):
-        if self.type == None: return self.attr_items
-        props = getattr(bpy.types,self.type).bl_rna.properties
-        items = [(p.identifier,p.name,p.description) for p in props]
-        return items
-    
-    # Currently supported attribute sources, maintained manually at the moment
-    supported_sources = {'MeshVertex','MeshLoop','MeshUVLoop','ShapeKeyPoint','VertexGroupElement','Material','MeshLoopColor','MeshPolygon','Scene','Object'}
-    source_items, attr_items = [], []
-    for src in supported_sources:
-        rna = getattr(bpy.types,src).bl_rna
-        source_items.append((rna.identifier,rna.name,rna.description))
-        props = rna.properties
-        items = [(p.identifier,p.name,p.description) for p in props]
-        attr_items.extend(items)
-    
     # Actual properties
-    type = bpy.props.EnumProperty(name="Source", description="Where to get the data from", items=source_items,default=None,update=fill_attr_cb)
-    attr = bpy.props.EnumProperty(name="Attribute", description="Which attribute to get", items=attr_items)
+    path = bpy.props.CollectionProperty(type=PathType)
     fmt  = bpy.props.StringProperty(name="Format", description="The format string to be used for the binary data", default="fff")
     int  = bpy.props.IntProperty(name="Int", description="Interpolation offset, i.e. 0 means value at current frame, 1 means value at next frame", default=0, min=0, max=1)
 
@@ -206,8 +206,29 @@ class RemoveAttributeOperator(Operator):
         context.active_operator.vertex_format.remove(self.id)
         return {'FINISHED'}
 
+class AddNodeOperator(Operator):
+    """Add a new node selection enum to the collection"""
+    bl_idname="export_scene.add_node_operator"
+    bl_label = "Add Node"
+    
+    id = bpy.props.IntProperty()
+    
+    def execute(self,context):
+        # Get value in self.id-1
+        fmt = context.active_operator.vertex_format
+        #if self.id > 0:
+        #    """Set new values here"""
+        #    prev = fmt[self.id-1].node.value
+        #    print(prev)
+        
+        new_cb = fmt[self.id].path.add()
+        
+        return {'FINISHED'}
+
 # Register these here already
+bpy.utils.register_class(PathType)
 bpy.utils.register_class(AttributeType)
+bpy.utils.register_class(AddNodeOperator)
 bpy.utils.register_class(AddAttributeOperator)
 bpy.utils.register_class(RemoveAttributeOperator)
 
@@ -359,8 +380,10 @@ class ExportGMSVertexBuffer(Operator, ExportHelper):
             
             for index, item in enumerate(self.vertex_format):
                 row = box.row()
-                row.prop(item,'type')
-                row.prop(item,'attr')
+                opt_add_node = row.operator("export_scene.add_node_operator",text="+")
+                opt_add_node.id = index
+                for path_node in item.path:
+                    row.prop(path_node,'node')
                 row.prop(item,'fmt')
                 row.prop(item,'func')
                 row.prop(item,'int')
