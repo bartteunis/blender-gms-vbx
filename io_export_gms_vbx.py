@@ -525,10 +525,9 @@ class ExportGMSVertexBuffer(Operator, ExportHelper):
         
         # Export bpy.context
         ctx["selected_objects"] = [object_to_json(obj) for obj in bpy.context.selected_objects]
-        ctx["scene"] = {"render":{"layers":[{layer.name:[i for i in layer.layers]} for layer in context.scene.render.layers]}}
+        ctx["scene"] = {"render":{"layers":[{"name":layer.name,"layers":[i for i in layer.layers]} for layer in context.scene.render.layers]}}
         
         # Export bpy.data
-        #data_to_export = ['cameras','lamps','speakers','armatures','materials','textures','actions','curves','groups']
         data_to_export = self.object_types_to_export
         for datatype in data_to_export:
             #data[datatype] = [object_to_json(obj) for obj in getattr(bpy.data,datatype)]
