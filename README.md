@@ -4,13 +4,14 @@ This exporter supports multiple materials and is meant for all kinds of models.
 * Generates one or more files with vertex buffer contents
 * Optionally performs (destructive) preparation steps
 * Generates an accompanying json file that describes all exported content
+* All mesh data of the same export/in the same file shares the same vertex format
 * Stuff to be supported: 
   * Customizable vertex format (Done)
   * Static scenery (Done)
   * Dynamic scenery (mesh data + offset per mesh/object in json file)
   * Nice-to-have: skeletons (i.e. armatures) => WIP
   * Morphs & per-frame stuff, including interpolation (Done)
-  * Vertex formats per object
+  * ~~Vertex formats per object~~
   * Extensive mapping of Blender data blocks to GameMaker functionality:
     * Scene => Room
     * Camera => Camera
