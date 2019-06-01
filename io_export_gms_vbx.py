@@ -225,12 +225,7 @@ class AddNodeOperator(Operator):
         
         return {'FINISHED'}
 
-# Register these here already
-bpy.utils.register_class(PathType)
-bpy.utils.register_class(AttributeType)
-bpy.utils.register_class(AddNodeOperator)
-bpy.utils.register_class(AddAttributeOperator)
-bpy.utils.register_class(RemoveAttributeOperator)
+
 
 # ExportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
@@ -239,6 +234,127 @@ class ExportGMSVertexBuffer(Operator, ExportHelper):
     bl_idname = "export_scene.gms_blmod" # important since its how bpy.ops.export_scene.gms_blmod is constructed
     bl_label = "Export GM:Studio BLMod"
     bl_options = {'PRESET'}              # Allow presets of exporter configurations
+    
+    @classmethod
+    def register(cls):
+        # Register these here already
+        bpy.utils.register_class(PathType)
+        bpy.utils.register_class(AttributeType)
+        bpy.utils.register_class(AddNodeOperator)
+        bpy.utils.register_class(AddAttributeOperator)
+        bpy.utils.register_class(RemoveAttributeOperator)
+        
+        ### Property Definitions ###
+        selection_only = BoolProperty(
+            name="Selection Only",
+            default=True,
+            description="Only export objects that are currently selected",
+        )
+        
+        reverse_loop = BoolProperty(
+            name="Reverse Loop",
+            default=False,
+            description="Reverse looping through triangle indices",
+        )
+        
+        frame_option = EnumProperty(
+            name="Frame",
+            description="Which frames to export",
+            items=(('cur',"Current","Export current frame only"),
+                   ('all',"All","Export all frames in range"),
+            )
+        )
+        
+        batch_mode = EnumProperty(
+            name="Batch Mode",
+            description="How to split individual object data over files",
+            items=(('one',"Single File", "Batch all into a single file"),
+                   ('perobj',"Per Object", "Create a file for each object in the selection"),
+                   ('perfra',"Per Frame", "Create a file for each frame"),
+                   ('objfra',"Per Object Then Frame", "Create a directory for each object with a file for each frame"),
+                   ('fraobj',"Per Frame Then Object", "Create a directory for each frame with a file for each object"),
+            )
+        )
+        
+        handedness = EnumProperty(
+            name="Handedness",
+            description="Handedness of the coordinate system to be used",
+            items=(('rh',"Right handed",""),
+                   ('lh',"Left handed",""),
+            )
+        )
+        
+        export_mesh_data = BoolProperty(
+            name="Export Mesh Data",
+            default=False,
+            description="Whether to export mesh data to a separate, binary file (.vbx)",
+        )
+        
+        export_json_data = BoolProperty(
+            name="Export Object Data",
+            default = True,
+            description="Whether to export blender data (bpy.data) in JSON format",
+        )
+        
+        object_types_to_export = EnumProperty(
+            name="Object Types",
+            description="Which types of object data to export",
+            options = {'ENUM_FLAG'},
+            items=(('cameras',"Cameras","Export cameras"),
+                   ('lamps',"Lamps","Export lamps"),
+                   ('speakers',"Speakers","Export speakers"),
+                   ('armatures',"Armatures","Export armatures"),
+                   ('materials',"Materials","Export materials"),
+                   ('textures',"Textures","Export textures"),
+                   ('actions',"Actions","Export actions"),
+                   ('curves',"Curves","Export curves"),
+                   ('groups',"Groups","Export groups"),
+            )
+        )
+        
+        export_json_filter = BoolProperty(
+            name="Filter Selection",
+            default = True,
+            description="Whether to filter data in bpy.data based on selection",
+        )
+        
+        apply_transforms = BoolProperty(
+            name="Apply Transforms",
+            default=True,
+            description="Whether to apply object transforms to mesh data",
+        )
+        
+        vertex_format = CollectionProperty(
+            name="Vertex Format",
+            type=bpy.types.AttributeType,
+        )
+        
+        join_into_active = BoolProperty(
+            name="Join Into Active",
+            default=False,
+            description="Whether to join the selection into the active object",
+        )
+        
+        split_by_material = BoolProperty(
+            name="Split By Material",
+            default=False,
+            description="Whether to split joined mesh by material after joining",
+        )
+        
+        export_textures = BoolProperty(
+            name="Export Textures",
+            default=True,
+            description="Export texture images to same directory as result file",
+        )
+        ### End of Property Definitions ###
+    
+    @classmethod
+    def unregister(cls):
+        bpy.utils.unregister_class(PathType)
+        bpy.utils.unregister_class(AttributeType)
+        bpy.utils.unregister_class(AddNodeOperator)
+        bpy.utils.unregister_class(AddAttributeOperator)
+        bpy.utils.unregister_class(RemoveAttributeOperator)
     
     def __init__(self):
         # Blender Python trickery: dynamic addition of an index variable to the class
@@ -252,110 +368,6 @@ class ExportGMSVertexBuffer(Operator, ExportHelper):
         options={'HIDDEN'},
         maxlen=255,  # Max internal buffer length, longer would be clamped.
     )
-    
-    ### Property Definitions ###
-    selection_only = BoolProperty(
-        name="Selection Only",
-        default=True,
-        description="Only export objects that are currently selected",
-    )
-    
-    reverse_loop = BoolProperty(
-        name="Reverse Loop",
-        default=False,
-        description="Reverse looping through triangle indices",
-    )
-    
-    frame_option = EnumProperty(
-        name="Frame",
-        description="Which frames to export",
-        items=(('cur',"Current","Export current frame only"),
-               ('all',"All","Export all frames in range"),
-        )
-    )
-    
-    batch_mode = EnumProperty(
-        name="Batch Mode",
-        description="How to split individual object data over files",
-        items=(('one',"Single File", "Batch all into a single file"),
-               ('perobj',"Per Object", "Create a file for each object in the selection"),
-               ('perfra',"Per Frame", "Create a file for each frame"),
-               ('objfra',"Per Object Then Frame", "Create a directory for each object with a file for each frame"),
-               ('fraobj',"Per Frame Then Object", "Create a directory for each frame with a file for each object"),
-        )
-    )
-    
-    handedness = EnumProperty(
-        name="Handedness",
-        description="Handedness of the coordinate system to be used",
-        items=(('rh',"Right handed",""),
-               ('lh',"Left handed",""),
-        )
-    )
-    
-    export_mesh_data = BoolProperty(
-        name="Export Mesh Data",
-        default=False,
-        description="Whether to export mesh data to a separate, binary file (.vbx)",
-    )
-    
-    export_json_data = BoolProperty(
-        name="Export Object Data",
-        default = True,
-        description="Whether to export blender data (bpy.data) in JSON format",
-    )
-    
-    object_types_to_export = EnumProperty(
-        name="Object Types",
-        description="Which types of object data to export",
-        options = {'ENUM_FLAG'},
-        items=(('cameras',"Cameras","Export cameras"),
-               ('lamps',"Lamps","Export lamps"),
-               ('speakers',"Speakers","Export speakers"),
-               ('armatures',"Armatures","Export armatures"),
-               ('materials',"Materials","Export materials"),
-               ('textures',"Textures","Export textures"),
-               ('actions',"Actions","Export actions"),
-               ('curves',"Curves","Export curves"),
-               ('groups',"Groups","Export groups"),
-        )
-    )
-    
-    export_json_filter = BoolProperty(
-        name="Filter Selection",
-        default = True,
-        description="Whether to filter data in bpy.data based on selection",
-    )
-    
-    apply_transforms = BoolProperty(
-        name="Apply Transforms",
-        default=True,
-        description="Whether to apply object transforms to mesh data",
-    )
-    
-    vertex_format = CollectionProperty(
-        name="Vertex Format",
-        type=bpy.types.AttributeType,
-    )
-    
-    join_into_active = BoolProperty(
-        name="Join Into Active",
-        default=False,
-        description="Whether to join the selection into the active object",
-    )
-    
-    split_by_material = BoolProperty(
-        name="Split By Material",
-        default=False,
-        description="Whether to split joined mesh by material after joining",
-    )
-    
-    export_textures = BoolProperty(
-        name="Export Textures",
-        default=True,
-        description="Export texture images to same directory as result file",
-    )
-    ### End of Property Definitions ###
     
     def draw(self, context):
         layout = self.layout
@@ -487,6 +499,7 @@ class ExportGMSVertexBuffer(Operator, ExportHelper):
             }
         }
         
+        @classmethod
         def object_to_json(obj):
             """Returns the data of the object in a json-compatible form"""
             result = {}
