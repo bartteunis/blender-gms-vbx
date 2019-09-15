@@ -43,6 +43,8 @@ def write_object_ba(scene,obj,desc,ba,frame,reverse_loop,apply_transforms):
     if apply_transforms:
         m.transform(obj.matrix_world)
     
+    m.calc_normals_split()
+    
     ba_pos = 0
     for p in m.polygons:
         # Loop through vertices
