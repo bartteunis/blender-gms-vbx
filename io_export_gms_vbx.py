@@ -222,6 +222,7 @@ class AttributeType(bpy.types.PropertyGroup):
     fmt = bpy.props.StringProperty(name="Format", description="The format string to be used for the binary data", default="fff")
     int = bpy.props.IntProperty(name="Int", description="Interpolation offset, i.e. 0 means value at current frame, 1 means value at next frame", default=0, min=0, max=1)
     func = bpy.props.StringProperty(name="Function", description="'Pre-processing' function to be called before conversion to binary format - must exist in globals()", default="")
+    args = bpy.props.StringProperty(name="Arguments", description="Provides the possibility to pass a custom argument to the function. This should be a json string that gets converted to a dict in the function", default="")
     #func = bpy.props.EnumProperty(name="Function", description="'Pre-processing' function to be called before conversion to binary format - must exist in globals()", items=[("","",""),("float_to_byte","float_to_byte",""),("vec_to_bytes","vec_to_bytes",""),("invert_v","invert_v",""),("invert_y","invert_y",""),("vertex_group_ids_to_bitmask","vertex_group_ids_to_bitmask","")], default="")
 
 # Operators to get the vertex format customization add/remove to work
@@ -405,6 +406,7 @@ class ExportGMSVertexBuffer(Operator, ExportHelper):
                 row.prop(item,'attr')
                 row.prop(item,'fmt')
                 row.prop(item,'func')
+                row.prop(item,'args')
                 row.prop(item,'int')
                 opt_remove = row.operator("export_scene.remove_attribute_operator",text="Remove")
                 opt_remove.id = index
