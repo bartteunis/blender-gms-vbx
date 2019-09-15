@@ -19,17 +19,19 @@ import json
 from os import path, makedirs
 from os.path import splitext, split
 from struct import pack, calcsize
+from math import floor              # Just to be sure
 
 ### Export Function Definitions ###
 def fetch_attribs(desc,node,ba,byte_pos,frame):
     """"Fetch the attribute values from the given node and place in ba at byte_pos"""
     id = node.bl_rna.identifier
     if id in desc:
-        for prop, occurences in desc[id].items():                   # Property name and occurences in bytedata
-            for offset, attr_blen, fmt, index, func in occurences:  # Each occurence's data (tuple assignment!)
+        for prop, occurrences in desc[id].items():                         # Property name and occurrences in bytedata
+            for offset, attr_blen, fmt, index, func, args in occurrences:  # Each occurence's data (tuple assignment!)
                 ind = byte_pos+offset
                 val = getattr(node,prop)
-                if func != None: val = func(val)
+                if func != None: 
+                    val = func(val) if args == "" else func(val,json.loads(args))
                 val_bin = pack(fmt,val) if len(fmt) == 1 else pack(fmt,*val)
                 ba[frame-index][ind:ind+attr_blen] = val_bin
 
@@ -80,7 +82,7 @@ def construct_ds(obj,attr):
     desc, offset = {}, 0
     
     for a in attr:
-        ident, atn, format, fo, func = a
+        ident, atn, format, fo, func, args = a
         
         if ident not in desc:
             desc[ident] = {}
@@ -93,7 +95,7 @@ def construct_ds(obj,attr):
         prop_rna = getattr(bpy.types,ident).bl_rna.properties[atn]
         attrib_bytesize = calcsize(format)
         
-        lst_attr.append((offset,attrib_bytesize,format,fo,func))
+        lst_attr.append((offset,attrib_bytesize,format,fo,func,args))
         offset += attrib_bytesize
         
     return (desc, offset)
@@ -457,7 +459,7 @@ class ExportGMSVertexBuffer(Operator, ExportHelper):
         for i, obj in enumerate(mesh_selection): obj.batch_index = i   # Guarantee a predictable batch index
         
         # Attribs
-        attribs = [(i.type,i.attr,i.fmt,i.int,None if i.func == "" else globals()[i.func]) for i in self.vertex_format]
+        attribs = [(i.type,i.attr,i.fmt,i.int,None if i.func == "" else globals()[i.func],i.args) for i in self.vertex_format]
         #print(attribs)
         
         # << Prepare a structure to map vertex attributes to the actual contents >>
