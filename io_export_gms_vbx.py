@@ -112,9 +112,13 @@ def construct_ba(obj,desc,frame_count):
 ### End of Export Function Definitions ###
 
 # Conversion functions (go into the globals() dictionary for now...)
-def float_to_byte(val):
+def fract_to_byte(val):
     """Convert value in range [0,1] to an integer value in range [0,255]"""
     return int(val*255)
+
+def float_to_byte(val):
+    """Convert float value to a byte, does not check bounds"""
+    return int(floor(val))
 
 def vec_to_bytes(val):
     """Convert a list of values in range [0,1] to a list of integer values in range [0,255]"""
@@ -139,6 +143,10 @@ def vertex_group_ids_to_bitmask(vertex):
 def mat_name_to_index(val):
     """Return the index of the material with the given name in bpy.data.materials"""
     return bpy.data.materials.find(val)
+
+def custom_map(val, custom_map):
+    """Provide a custom mapping for a given attribute"""
+    return custom_map[val]
 
 # Stuff to export physics
 def object_physics_to_json(obj):
