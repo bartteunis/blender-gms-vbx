@@ -561,7 +561,7 @@ class ExportGMSVertexBuffer(Operator, ExportHelper):
         json_data["blmod"] = {
             "mesh_data":{
                 "location":fn + ".vbx",
-                "format":[{"type":x.type,"attr":x.attr,"fmt":x.fmt} for x in self.vertex_format],
+                "format":[{"type":x.type,"attr":x.attr,"fmt":x.fmt,"args":x.args} for x in self.vertex_format],
                 "ranges":{obj.name:{"no_verts":no_verts_per_object[obj],"offset":offset[obj]} for obj in mesh_selection},
             },
             "settings":{"apply_transforms":self.apply_transforms},
