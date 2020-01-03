@@ -193,69 +193,6 @@ def object_get_diffuse_color(obj):
     else:
         return (1.0,1.0,1.0)
 
-# Custom type to be used in collection
-class AttributeType(bpy.types.PropertyGroup):
-    # Getter and setter functions
-    def test_cb(self,context):
-        props = getattr(bpy.types,self.type).bl_rna.properties
-        items = [(p.identifier,p.name,p.description) for p in props]
-        return items
-    
-    #def update_type(self, context):
-    #    self.attr = test_cb(self,context)
-    
-    def set_format_from_type(self, context):
-        attr = getattr(bpy.types,self.type).bl_rna.properties[self.attr]
-        map_fmt = {'FLOAT':'f','INT':'i', 'BOOLEAN':'?'}    # TODO: extend this list a bit more
-        type = map_fmt.get(attr.type,'*')                   # Asterisk '*' means "I don't know what this should be..."
-        self.fmt = type * attr.array_length if attr.is_array else type
-    
-    # Currently supported attribute sources, maintained manually at the moment
-    supported_sources = {'MeshVertex','MeshLoop','MeshUVLoop','ShapeKeyPoint','VertexGroupElement','Material','MeshLoopColor','MeshPolygon','Scene','Object'}
-    source_items = []
-    for src in supported_sources:
-        id = getattr(bpy.types,src)
-        rna = id.bl_rna
-        source_items.append((rna.identifier,rna.name,rna.description))
-    
-    # Actual properties
-    type = bpy.props.EnumProperty(name="Source", description="Where to get the data from", items=source_items, default="MeshVertex", update = set_format_from_type)
-    attr = bpy.props.EnumProperty(name="Attribute", description="Which attribute to get", items=test_cb, update = set_format_from_type)
-    fmt = bpy.props.StringProperty(name="Format", description="The format string to be used for the binary data", default="fff")
-    int = bpy.props.IntProperty(name="Int", description="Interpolation offset, i.e. 0 means value at current frame, 1 means value at next frame", default=0, min=0, max=1)
-    func = bpy.props.StringProperty(name="Function", description="'Pre-processing' function to be called before conversion to binary format - must exist in globals()", default="")
-    args = bpy.props.StringProperty(name="Arguments", description="Provides the possibility to pass a custom argument to the function. This should be a json string that gets converted to a dict in the function", default="")
-    #func = bpy.props.EnumProperty(name="Function", description="'Pre-processing' function to be called before conversion to binary format - must exist in globals()", items=[("","",""),("float_to_byte","float_to_byte",""),("vec_to_bytes","vec_to_bytes",""),("invert_v","invert_v",""),("invert_y","invert_y",""),("vertex_group_ids_to_bitmask","vertex_group_ids_to_bitmask","")], default="")
-
-# Operators to get the vertex format customization add/remove to work
-# See https://blender.stackexchange.com/questions/57545/can-i-make-a-ui-button-that-makes-buttons-in-a-panel
-class AddAttributeOperator(Operator):
-    """Add a new attribute to the vertex format"""
-    bl_idname = "export_scene.add_attribute_operator"
-    bl_label = "Add Vertex Attribute"
-
-    def execute(self, context):
-        # context.active_operator refers to ExportGMSVertexBuffer instance
-        context.active_operator.vertex_format.add()
-        return {'FINISHED'}
-
-class RemoveAttributeOperator(Operator):
-    """Remove the selected attribute from the vertex format"""
-    bl_idname = "export_scene.remove_attribute_operator"
-    bl_label = "Remove Vertex Attribute"
-    
-    id = bpy.props.IntProperty()
-    
-    def execute(self, context):
-        # context.active_operator refers to ExportGMSVertexBuffer instance
-        context.active_operator.vertex_format.remove(self.id)
-        return {'FINISHED'}
-
-# Register these here already
-bpy.utils.register_class(AttributeType)
-bpy.utils.register_class(AddAttributeOperator)
-bpy.utils.register_class(RemoveAttributeOperator)
-
 # ExportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
 class ExportGMSVertexBuffer(Operator, ExportHelper):
@@ -263,6 +200,69 @@ class ExportGMSVertexBuffer(Operator, ExportHelper):
     bl_idname = "export_scene.gms_blmod" # important since its how bpy.ops.export_scene.gms_blmod is constructed
     bl_label = "Export GM:Studio BLMod"
     bl_options = {'PRESET'}                 # Allow presets of exporter configurations
+    
+    # Custom type to be used in collection
+    class AttributeType(bpy.types.PropertyGroup):
+        # Getter and setter functions
+        def test_cb(self,context):
+            props = getattr(bpy.types,self.type).bl_rna.properties
+            items = [(p.identifier,p.name,p.description) for p in props]
+            return items
+        
+        #def update_type(self, context):
+        #    self.attr = test_cb(self,context)
+        
+        def set_format_from_type(self, context):
+            attr = getattr(bpy.types,self.type).bl_rna.properties[self.attr]
+            map_fmt = {'FLOAT':'f','INT':'i', 'BOOLEAN':'?'}    # TODO: extend this list a bit more
+            type = map_fmt.get(attr.type,'*')                   # Asterisk '*' means "I don't know what this should be..."
+            self.fmt = type * attr.array_length if attr.is_array else type
+        
+        # Currently supported attribute sources, maintained manually at the moment
+        supported_sources = {'MeshVertex','MeshLoop','MeshUVLoop','ShapeKeyPoint','VertexGroupElement','Material','MeshLoopColor','MeshPolygon','Scene','Object'}
+        source_items = []
+        for src in supported_sources:
+            id = getattr(bpy.types,src)
+            rna = id.bl_rna
+            source_items.append((rna.identifier,rna.name,rna.description))
+        
+        # Actual properties
+        type = bpy.props.EnumProperty(name="Source", description="Where to get the data from", items=source_items, default="MeshVertex", update = set_format_from_type)
+        attr = bpy.props.EnumProperty(name="Attribute", description="Which attribute to get", items=test_cb, update = set_format_from_type)
+        fmt = bpy.props.StringProperty(name="Format", description="The format string to be used for the binary data", default="fff")
+        int = bpy.props.IntProperty(name="Int", description="Interpolation offset, i.e. 0 means value at current frame, 1 means value at next frame", default=0, min=0, max=1)
+        func = bpy.props.StringProperty(name="Function", description="'Pre-processing' function to be called before conversion to binary format - must exist in globals()", default="")
+        args = bpy.props.StringProperty(name="Arguments", description="Provides the possibility to pass a custom argument to the function. This should be a json string that gets converted to a dict in the function", default="")
+        #func = bpy.props.EnumProperty(name="Function", description="'Pre-processing' function to be called before conversion to binary format - must exist in globals()", items=[("","",""),("float_to_byte","float_to_byte",""),("vec_to_bytes","vec_to_bytes",""),("invert_v","invert_v",""),("invert_y","invert_y",""),("vertex_group_ids_to_bitmask","vertex_group_ids_to_bitmask","")], default="")
+
+    # Operators to get the vertex format customization add/remove to work
+    # See https://blender.stackexchange.com/questions/57545/can-i-make-a-ui-button-that-makes-buttons-in-a-panel
+    class AddAttributeOperator(Operator):
+        """Add a new attribute to the vertex format"""
+        bl_idname = "export_scene.add_attribute_operator"
+        bl_label = "Add Vertex Attribute"
+
+        def execute(self, context):
+            # context.active_operator refers to ExportGMSVertexBuffer instance
+            context.active_operator.vertex_format.add()
+            return {'FINISHED'}
+
+    class RemoveAttributeOperator(Operator):
+        """Remove the selected attribute from the vertex format"""
+        bl_idname = "export_scene.remove_attribute_operator"
+        bl_label = "Remove Vertex Attribute"
+        
+        id = bpy.props.IntProperty()
+        
+        def execute(self, context):
+            # context.active_operator refers to ExportGMSVertexBuffer instance
+            context.active_operator.vertex_format.remove(self.id)
+            return {'FINISHED'}
+    
+    # Register these here already
+    bpy.utils.register_class(AttributeType)
+    bpy.utils.register_class(AddAttributeOperator)
+    bpy.utils.register_class(RemoveAttributeOperator)
     
     def __init__(self):
         # Blender Python trickery: dynamic addition of an index variable to the class
