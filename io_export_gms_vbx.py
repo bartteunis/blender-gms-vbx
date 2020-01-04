@@ -21,98 +21,6 @@ from os.path import splitext, split
 from struct import pack, calcsize
 from math import floor              # Just to be sure
 
-### Export Function Definitions ###
-def fetch_attribs(desc,node,ba,byte_pos,frame):
-    """"Fetch the attribute values from the given node and place in ba at byte_pos"""
-    id = node.bl_rna.identifier
-    if id in desc:
-        for prop, occurrences in desc[id].items():                         # Property name and occurrences in bytedata
-            for offset, attr_blen, fmt, index, func, args in occurrences:  # Each occurence's data (tuple assignment!)
-                ind = byte_pos+offset
-                val = getattr(node,prop)
-                if func != None: 
-                    val = func(val) if args == "" else func(val,json.loads(args))
-                val_bin = pack(fmt,val) if len(fmt) == 1 else pack(fmt,*val)
-                ba[frame-index][ind:ind+attr_blen] = val_bin
-
-def write_object_ba(scene,obj,desc,ba,frame,reverse_loop,apply_transforms):
-    """Traverse the object's mesh data at the given frame and write to the appropriate bytearray in ba using the description data structure provided"""
-    desc, vertex_format_bytesize = desc
-    
-    mod_tri = obj.modifiers.new('triangulate_for_export','TRIANGULATE')
-    m = obj.to_mesh(bpy.context.scene,True,'RENDER')
-    obj.modifiers.remove(mod_tri)
-    if apply_transforms:
-        m.transform(obj.matrix_world)
-    
-    m.calc_normals_split()
-    
-    ba_pos = 0
-    for p in m.polygons:
-        # Loop through vertices
-        iter = reversed(p.loop_indices) if reverse_loop else p.loop_indices
-        for li in iter:
-            fetch_attribs(desc,scene,ba,ba_pos,frame)
-            fetch_attribs(desc,obj,ba,ba_pos,frame)
-            
-            fetch_attribs(desc,p,ba,ba_pos,frame)
-            
-            mat = m.materials[p.material_index]
-            if not mat.use_nodes:
-                fetch_attribs(desc,mat,ba,ba_pos,frame)
-            
-            loop = m.loops[li]
-            fetch_attribs(desc,loop,ba,ba_pos,frame)
-            
-            if not mat.use_nodes:
-                uvs = m.uv_layers.active.data
-                uv = uvs[loop.index]                                # Use active uv layer
-                fetch_attribs(desc,uv,ba,ba_pos,frame)
-            
-            vertex = m.vertices[loop.vertex_index]
-            fetch_attribs(desc,vertex,ba,ba_pos,frame)
-            
-            # We wrote a full vertex, so we can now increment the bytearray position by the vertex format size
-            ba_pos += vertex_format_bytesize
-    
-    bpy.data.meshes.remove(m)
-
-def construct_ds(obj,attr):
-    """Constructs the data structure required to move through the attributes of a given object"""
-    desc, offset = {}, 0
-    
-    for a in attr:
-        ident, atn, format, fo, func, args = a
-        
-        if ident not in desc:
-            desc[ident] = {}
-        dct_obj = desc[ident]
-        
-        if atn not in dct_obj:
-            dct_obj[atn] = []
-        lst_attr = dct_obj[atn]
-        
-        prop_rna = getattr(bpy.types,ident).bl_rna.properties[atn]
-        attrib_bytesize = calcsize(format)
-        
-        lst_attr.append((offset,attrib_bytesize,format,fo,func,args))
-        offset += attrib_bytesize
-        
-    return (desc, offset)
-
-def construct_ba(obj,desc,frame_count):
-    """Construct the required bytearrays to store vertex data for the given object for the given number of frames"""
-    mod_tri = obj.modifiers.new('triangulate_for_export','TRIANGULATE')
-    m = obj.to_mesh(bpy.context.scene,True,'RENDER')
-    obj.modifiers.remove(mod_tri)
-    no_verts = len(m.polygons) * 3
-    bpy.data.meshes.remove(m)                                   # Any easier way to get number of vertices??
-    desc, vertex_format_bytesize = desc
-    ba = [bytearray([0] * no_verts * vertex_format_bytesize) for i in range(0,frame_count)]
-    return ba, no_verts
-
-### End of Export Function Definitions ###
-
 # Conversion functions (go into the globals() dictionary for now...)
 def fract_to_byte(val):
     """Convert value in range [0,1] to an integer value in range [0,255]"""
@@ -200,6 +108,102 @@ class ExportGMSVertexBuffer(Operator, ExportHelper):
     bl_idname = "export_scene.gms_blmod" # important since its how bpy.ops.export_scene.gms_blmod is constructed
     bl_label = "Export GM:Studio BLMod"
     bl_options = {'PRESET'}                 # Allow presets of exporter configurations
+    
+    ### Export Function Definitions ###
+    @staticmethod
+    def fetch_attribs(desc,node,ba,byte_pos,frame):
+        """"Fetch the attribute values from the given node and place in ba at byte_pos"""
+        id = node.bl_rna.identifier
+        if id in desc:
+            for prop, occurrences in desc[id].items():                         # Property name and occurrences in bytedata
+                for offset, attr_blen, fmt, index, func, args in occurrences:  # Each occurence's data (tuple assignment!)
+                    ind = byte_pos+offset
+                    val = getattr(node,prop)
+                    if func != None: 
+                        val = func(val) if args == "" else func(val,json.loads(args))
+                    val_bin = pack(fmt,val) if len(fmt) == 1 else pack(fmt,*val)
+                    ba[frame-index][ind:ind+attr_blen] = val_bin
+
+    @staticmethod
+    def write_object_ba(scene,obj,desc,ba,frame,reverse_loop,apply_transforms):
+        """Traverse the object's mesh data at the given frame and write to the appropriate bytearray in ba using the description data structure provided"""
+        desc, vertex_format_bytesize = desc
+        
+        mod_tri = obj.modifiers.new('triangulate_for_export','TRIANGULATE')
+        m = obj.to_mesh(bpy.context.scene,True,'RENDER')
+        obj.modifiers.remove(mod_tri)
+        if apply_transforms:
+            m.transform(obj.matrix_world)
+        
+        m.calc_normals_split()
+        
+        ba_pos = 0
+        for p in m.polygons:
+            # Loop through vertices
+            iter = reversed(p.loop_indices) if reverse_loop else p.loop_indices
+            for li in iter:
+                ExportGMSVertexBuffer.fetch_attribs(desc,scene,ba,ba_pos,frame)
+                ExportGMSVertexBuffer.fetch_attribs(desc,obj,ba,ba_pos,frame)
+                
+                ExportGMSVertexBuffer.fetch_attribs(desc,p,ba,ba_pos,frame)
+                
+                mat = m.materials[p.material_index]
+                if not mat.use_nodes:
+                    ExportGMSVertexBuffer.fetch_attribs(desc,mat,ba,ba_pos,frame)
+                
+                loop = m.loops[li]
+                ExportGMSVertexBuffer.fetch_attribs(desc,loop,ba,ba_pos,frame)
+                
+                if not mat.use_nodes:
+                    uvs = m.uv_layers.active.data
+                    uv = uvs[loop.index]                                # Use active uv layer
+                    ExportGMSVertexBuffer.fetch_attribs(desc,uv,ba,ba_pos,frame)
+                
+                vertex = m.vertices[loop.vertex_index]
+                ExportGMSVertexBuffer.fetch_attribs(desc,vertex,ba,ba_pos,frame)
+                
+                # We wrote a full vertex, so we can now increment the bytearray position by the vertex format size
+                ba_pos += vertex_format_bytesize
+        
+        bpy.data.meshes.remove(m)
+
+    @staticmethod
+    def construct_ds(obj,attr):
+        """Constructs the data structure required to move through the attributes of a given object"""
+        desc, offset = {}, 0
+        
+        for a in attr:
+            ident, atn, format, fo, func, args = a
+            
+            if ident not in desc:
+                desc[ident] = {}
+            dct_obj = desc[ident]
+            
+            if atn not in dct_obj:
+                dct_obj[atn] = []
+            lst_attr = dct_obj[atn]
+            
+            prop_rna = getattr(bpy.types,ident).bl_rna.properties[atn]
+            attrib_bytesize = calcsize(format)
+            
+            lst_attr.append((offset,attrib_bytesize,format,fo,func,args))
+            offset += attrib_bytesize
+            
+        return (desc, offset)
+
+    @staticmethod
+    def construct_ba(obj,desc,frame_count):
+        """Construct the required bytearrays to store vertex data for the given object for the given number of frames"""
+        mod_tri = obj.modifiers.new('triangulate_for_export','TRIANGULATE')
+        m = obj.to_mesh(bpy.context.scene,True,'RENDER')
+        obj.modifiers.remove(mod_tri)
+        no_verts = len(m.polygons) * 3
+        bpy.data.meshes.remove(m)                                   # Any easier way to get number of vertices??
+        desc, vertex_format_bytesize = desc
+        ba = [bytearray([0] * no_verts * vertex_format_bytesize) for i in range(0,frame_count)]
+        return ba, no_verts
+
+    ### End of Export Function Definitions ###
     
     # Custom type to be used in collection
     class AttributeType(bpy.types.PropertyGroup):
@@ -469,8 +473,8 @@ class ExportGMSVertexBuffer(Operator, ExportHelper):
         no_verts_per_object = {}
         desc_per_object = {}
         for obj in mesh_selection:
-            desc_per_object[obj] = construct_ds(obj,attribs)
-            ba_per_object[obj], no_verts_per_object[obj] = construct_ba(obj,desc_per_object[obj],frame_count)
+            desc_per_object[obj] = ExportGMSVertexBuffer.construct_ds(obj,attribs)
+            ba_per_object[obj], no_verts_per_object[obj] = ExportGMSVertexBuffer.construct_ba(obj,desc_per_object[obj],frame_count)
         
         # << End of preparation of structure >>
         
@@ -483,7 +487,7 @@ class ExportGMSVertexBuffer(Operator, ExportHelper):
             
             # Now add frame vertex data for the current object
             for obj in mesh_selection:
-                write_object_ba(s,obj,desc_per_object[obj],ba_per_object[obj],i,self.reverse_loop,self.apply_transforms)
+                ExportGMSVertexBuffer.write_object_ba(s,obj,desc_per_object[obj],ba_per_object[obj],i,self.reverse_loop,self.apply_transforms)
         
         # Final step: write all bytearrays to one or more file(s) in one or more directories
         fn, ext = splitext(fname)
