@@ -1,4 +1,7 @@
 # Blender to GameMaker:Studio Exporter
+IMPORTANT: this repository is archived. The new one can be found here: 
+https://github.com/blender-to-gmstudio/blender-gms-vtx-buffer
+
 This exporter supports multiple materials and is meant for all kinds of models.
 ## Description / Planned features
 * Generates one or more files with vertex buffer contents
